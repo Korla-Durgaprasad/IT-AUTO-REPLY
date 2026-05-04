@@ -1,0 +1,42 @@
+# AUTO-REPLY: single host with MongoDB + app (WhatsApp needs a long-running process; not serverless).
+# Run: docker compose up -d --build
+# Open: http://localhost:5050  (UI + API same origin)
+
+services:
+  mongo:
+    image: mongo:7
+    restart: unless-stopped
+    volumes:
+      - mongo_data:/data/db
+    healthcheck:
+      test: ['CMD', 'mongosh', '--eval', "db.adminCommand('ping')"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+
+  app:
+    build: .
+    restart: unless-stopped
+    ports:
+      - '5050:5050'
+    environment:
+      MONGO_URI: mongodb://mongo:27017/auto-reply
+      PORT: '5050'
+      NODE_ENV: production
+      SERVE_STATIC: 'true'
+      PUPPETEER_EXECUTABLE_PATH: /usr/bin/chromium
+      PUPPETEER_SKIP_CHROMIUM_DOWNLOAD: 'true'
+      # Headless in container; for QR you must use a different flow (export session from desktop or VNC)
+      WA_HEADLESS: 'true'
+      # Persist WhatsApp session across restarts
+      WA_USER_DATA_DIR: /data/wa-session
+    volumes:
+      - wa_session:/data/wa-session
+    depends_on:
+      mongo:
+        condition: service_healthy
+
+volumes:
+  mongo_data: {}
+  wa_session: {}
